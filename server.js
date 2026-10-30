@@ -5,17 +5,23 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const listingsRouter = require("./routes/listings");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORS
 app.use(cors({
     origin: process.env.FRONTEND_URL
         ? process.env.FRONTEND_URL.split(",").map(url => url.trim())
         : true
 }));
 
+// Middleware
 app.use(express.json({ limit: "1mb" }));
+
+// Marketplace listings routes
+app.use("/api/listings", listingsRouter);
 
 // الصفحة الرئيسية
 app.get("/", (req, res) => {
@@ -56,7 +62,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-// الاتصال بقاعدة البيانات
+// الاتصال بقاعدة البيانات وتشغيل الخادم
 mongoose.connect(process.env.MONGODB_URI)
     .then(() => {
         console.log("MongoDB connected successfully.");
