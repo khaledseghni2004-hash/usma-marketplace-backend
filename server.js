@@ -4,12 +4,11 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 
 const app = express();
-
 const PORT = process.env.PORT || 3000;
 
-// Middleware
 app.use(cors({
     origin: process.env.FRONTEND_URL
         ? process.env.FRONTEND_URL.split(",").map(url => url.trim())
@@ -27,11 +26,14 @@ app.get("/", (req, res) => {
     });
 });
 
-// اختبار حالة الخادم
+// اختبار الخادم واتصال قاعدة البيانات
 app.get("/api/health", (req, res) => {
-    res.status(200).json({
-        success: true,
-        status: "ONLINE",
+    const connected = mongoose.connection.readyState === 1;
+
+    res.status(connected ? 200 : 503).json({
+        success: connected,
+        status: connected ? "ONLINE" : "DATABASE_DISCONNECTED",
+        database: connected ? "CONNECTED" : "DISCONNECTED",
         service: "USMA Marketplace Backend"
     });
 });
@@ -54,7 +56,19 @@ app.use((err, req, res, next) => {
     });
 });
 
-// تشغيل الخادم
-app.listen(PORT, () => {
-    console.log(`USMA Marketplace API running on port ${PORT}`);
-});
+// الاتصال بقاعدة البيانات
+mongoose.connect(process.env.MONGODB_URI)
+    .then(() => {
+        console.log("MongoDB connected successfully.");
+
+        app.listen(PORT, () => {
+            console.log(`USMA Marketplace API running on port ${PORT}`);
+        });
+    })
+    .catch((error) => {
+        console.error("MongoDB connection failed:", error.message);
+
+        app.listen(PORT, () => {
+            console.log(`USMA Marketplace API running without database on port ${PORT}`);
+        });
+    });
