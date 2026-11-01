@@ -5,80 +5,131 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+
 const listingsRouter = require("./routes/listings");
 const adminRouter = require("./routes/admin");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// CORS
-app.use(cors({
-origin: process.env.FRONTEND_URL
-? process.env.FRONTEND_URL.split(",").map(url => url.trim())
-: true
-}));
+/* =========================================
+   CORS CONFIGURATION
+========================================= */
 
-// Middleware
+const allowedOrigins = [
+    "https://usmahistory37.netlify.app",
+    ...(process.env.FRONTEND_URL || "")
+        .split(",")
+        .map(url => url.trim().replace(/\/$/, ""))
+        .filter(Boolean)
+];
+
+const corsOptions = {
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        console.log("CORS blocked origin:", origin);
+        return callback(new Error("Not allowed by CORS"));
+    },
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    optionsSuccessStatus: 204
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
+
+/* =========================================
+   MIDDLEWARE
+========================================= */
+
 app.use(express.json({ limit: "1mb" }));
 
-// Marketplace routes
+/* =========================================
+   MARKETPLACE ROUTES
+========================================= */
+
 app.use("/api/listings", listingsRouter);
 app.use("/api/admin", adminRouter);
 
-// Homepage
+/* =========================================
+   HOMEPAGE
+========================================= */
+
 app.get("/", (req, res) => {
-res.json({
-success: true,
-message: "USMA Marketplace API is running.",
-version: "1.0.0"
-});
+    res.json({
+        success: true,
+        message: "USMA Marketplace API is running.",
+        version: "1.0.0"
+    });
 });
 
-// Health check
+/* =========================================
+   HEALTH CHECK
+========================================= */
+
 app.get("/api/health", (req, res) => {
-const connected = mongoose.connection.readyState === 1;
+    const connected = mongoose.connection.readyState === 1;
 
-res.status(connected ? 200 : 503).json({
-    success: connected,
-    status: connected ? "ONLINE" : "DATABASE_DISCONNECTED",
-    database: connected ? "CONNECTED" : "DISCONNECTED",
-    service: "USMA Marketplace Backend"
+    res.status(connected ? 200 : 503).json({
+        success: connected,
+        status: connected ? "ONLINE" : "DATABASE_DISCONNECTED",
+        database: connected ? "CONNECTED" : "DISCONNECTED",
+        service: "USMA Marketplace Backend"
+    });
 });
 
-});
+/* =========================================
+   404 HANDLER
+========================================= */
 
-// 404
 app.use((req, res) => {
-res.status(404).json({
-success: false,
-message: "Route not found."
-});
+    res.status(404).json({
+        success: false,
+        message: "Route not found."
+    });
 });
 
-// Error handler
+/* =========================================
+   ERROR HANDLER
+========================================= */
+
 app.use((err, req, res, next) => {
-console.error(err);
+    console.error("Server error:", err.message);
 
-res.status(500).json({
-    success: false,
-    message: "Internal server error."
+    if (err.message === "Not allowed by CORS") {
+        return res.status(403).json({
+            success: false,
+            message: "Origin not allowed by CORS."
+        });
+    }
+
+    res.status(500).json({
+        success: false,
+        message: "Internal server error."
+    });
 });
 
-});
+/* =========================================
+   DATABASE CONNECTION & SERVER START
+========================================= */
 
-// Database connection
 mongoose.connect(process.env.MONGODB_URI)
-.then(() => {
-console.log("MongoDB connected successfully.");
+    .then(() => {
+        console.log("MongoDB connected successfully.");
 
-    app.listen(PORT, () => {
-        console.log(`USMA Marketplace API running on port ${PORT}`);
-    });
-})
-.catch((error) => {
-    console.error("MongoDB connection failed:", error.message);
+        app.listen(PORT, () => {
+            console.log(`USMA Marketplace API running on port ${PORT}`);
+        });
+    })
+    .catch((error) => {
+        console.error("MongoDB connection failed:", error.message);
 
-    app.listen(PORT, () => {
-        console.log(`USMA Marketplace API running without database on port ${PORT}`);
+        app.listen(PORT, () => {
+            console.log(
+                `USMA Marketplace API running without database on port ${PORT}`
+            );
+        });
     });
-});
